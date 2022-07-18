@@ -1,5 +1,5 @@
-import { doc, getDoc } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import { useCallback, useEffect, useState } from "react";
 
 import { documentCollectionRef } from "../../model";
 import styled from "styled-components";
@@ -127,6 +127,12 @@ const TextCountExplain = styled.div`
   font-weight: normal;
 `;
 
+const ErrorMessageContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+`;
+
 // 제목
 function Title(props: {
   title: string;
@@ -242,33 +248,81 @@ function Editor({ selectedId, syncDatabase }: EditorProps) {
     syncDatabase(selectedId, state.title, content);
   };
 
-  useEffect(() => {
-    (async () => {
-      const serverData =
-        selectedId === undefined
-          ? undefined
-          : (await getDoc(doc(documentCollectionRef, selectedId))).data();
-      setState({
-        type: "editing",
-        title: serverData?.title ?? "",
-        content: serverData?.content ?? "",
-      });
-    })();
+  const initializeWithServerData = useCallback(async () => {
+    const serverData =
+      selectedId === undefined
+        ? undefined
+        : (await getDoc(doc(documentCollectionRef, selectedId))).data();
+    setState({
+      type: "editing",
+      title: serverData?.title ?? "",
+      content: serverData?.content ?? "",
+    });
   }, [selectedId]);
+
+  const listenToChangesFromServer = useCallback(
+    (id: string, onChange: () => void) => {
+      let initialSnapshot = true;
+      const unsubscribe = onSnapshot(
+        doc(documentCollectionRef, id),
+        (snapshot) => {
+          const isFromServer = !snapshot.metadata.hasPendingWrites;
+          // Initial snapshot always comes from the server.
+          if (initialSnapshot) {
+            initialSnapshot = false;
+            return;
+          }
+          if (isFromServer) {
+            onChange();
+          }
+        }
+      );
+      return unsubscribe;
+    },
+    []
+  );
+
+  useEffect(() => {
+    initializeWithServerData();
+  }, [initializeWithServerData]);
+
+  useEffect(() => {
+    if (selectedId !== undefined) {
+      const unsubscribe = listenToChangesFromServer(selectedId, () =>
+        setState({
+          type: "error",
+          error:
+            "다른 기기에서 편집중입니다. 이 기기에서 계속하려면 새로고침 해주세요.",
+        })
+      );
+
+      return () => unsubscribe();
+    }
+  }, [listenToChangesFromServer, selectedId]);
 
   return (
     <Divver>
-      <Title
-        title={state.type === "editing" ? state.title : ""}
-        disabled={state.type !== "editing"}
-        setTitle={setTitle}
-        syncDatabase={syncDatabase}
-      />
-      <Text
-        content={state.type === "editing" ? state.content : ""}
-        disabled={state.type !== "editing"}
-        setContent={setContent}
-      />
+      {state.type === "error" ? (
+        <ErrorMessageContainer>
+          <span>
+            <b>알림</b>-{state.error}
+          </span>
+        </ErrorMessageContainer>
+      ) : (
+        <>
+          <Title
+            title={state.type === "editing" ? state.title : ""}
+            disabled={state.type !== "editing"}
+            setTitle={setTitle}
+            syncDatabase={syncDatabase}
+          />
+          <Text
+            content={state.type === "editing" ? state.content : ""}
+            disabled={state.type !== "editing"}
+            setContent={setContent}
+          />
+        </>
+      )}
     </Divver>
   );
 }
