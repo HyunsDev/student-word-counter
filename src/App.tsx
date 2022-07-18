@@ -7,7 +7,7 @@ function Inner() {
   const { user } = useAuth();
 
   if (user) {
-    return <Editor />;
+    return <Editor user={user} />;
   }
   return <Auth />;
 }

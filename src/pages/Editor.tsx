@@ -1,9 +1,19 @@
-import React, { useCallback, useEffect, useState } from "react";
+import { Dispatch, SetStateAction, useEffect, useMemo, useState } from "react";
+import { Document, documentCollectionRef } from "../model";
+import {
+  DocumentReference,
+  addDoc,
+  doc,
+  limit,
+  onSnapshot,
+  query,
+  updateDoc,
+  where,
+} from "firebase/firestore";
+import { User, signOut } from "firebase/auth";
 
 import { auth } from "../firebase";
-import { signOut } from "firebase/auth";
 import styled from "styled-components";
-import { v4 as uuidv4 } from "uuid";
 
 function counter(content: string) {
   if (!content) content = "";
@@ -202,25 +212,24 @@ const BottomMenu = styled.div`
 
 // 제목
 function Title(props: {
-  title: string;
-  setTitle: Function;
-  newWriting: Function;
-  editTitle: Function;
+  document: Document | null;
+  updateTitle: (title: string) => Promise<void>;
+  createDocument: () => Promise<DocumentReference<Document>>;
 }) {
   return (
     <TitleDiv>
       <TitleInput
-        value={props.title}
-        onChange={(e) => props.editTitle(e.target.value)}
+        value={props.document?.title ?? ""}
+        onChange={(e) => props.updateTitle(e.target.value)}
         placeholder="제목 없음"
       />
-      <Btn onClick={(e) => props.newWriting()}>새로운 글 만들기</Btn>
+      <Btn onClick={() => props.createDocument()}>새로운 글 만들기</Btn>
     </TitleDiv>
   );
 }
 
 // 글자 수
-function TextCount(props: { text: string }) {
+function TextCount(props: { document: Document | null }) {
   const [res, setRes] = useState({
     noSpace: 0,
     withSpace: 0,
@@ -228,8 +237,8 @@ function TextCount(props: { text: string }) {
   });
 
   useEffect(() => {
-    setRes(counter(props.text));
-  }, [props.text]);
+    setRes(counter(props.document?.content ?? ""));
+  }, [props.document]);
 
   return (
     <TextCountDiv>
@@ -245,192 +254,100 @@ function TextCount(props: { text: string }) {
 }
 
 // 글 입력
-function Text(props: { text: string; setText: Function }) {
+function Text(props: {
+  document: Document | null;
+  updateContent: (content: string) => Promise<void>;
+}) {
   return (
     <TextDiv>
       <TextArea
-        value={props.text}
-        onChange={(e) => props.setText(e.target.value)}
+        value={props.document?.content ?? ""}
+        onChange={(e) => props.updateContent(e.target.value)}
       ></TextArea>
-      <TextCount text={props.text} />
+      <TextCount document={props.document} />
     </TextDiv>
   );
 }
 
 // 글 리스트
-function WritingList(props: { load: Function }) {
-  let data;
-  try {
-    data = Object.entries(
-      JSON.parse(localStorage.getItem("saveData") || "{}")
-    ).map((e: any) => {
-      return (
-        <Writing key={e[0]} onClick={() => props.load(e[0])}>
-          {e[1].title || <span>제목 없음</span>}
-        </Writing>
-      );
-    });
-  } catch (err) {
-    console.error(err);
-    console.log(localStorage.getItem("saveData"));
-    if (window.confirm("데이터가 잘못되었어요. 초기화하시겠어요?")) {
-      localStorage.removeItem("saveData");
-      window.location.reload();
-    }
-  }
-
+function WritingList(props: {
+  documents: Document[];
+  setSelectedId: Dispatch<SetStateAction<string | null>>;
+}) {
   return (
     <SaveLoadDiv>
       <Btns></Btns>
-      <Writings>{data}</Writings>
+      <Writings>
+        {props.documents.map((document) => (
+          <Writing
+            key={document.id}
+            onClick={() => props.setSelectedId(document.id ?? null)}
+          >
+            {document.title || "제목 없음"}
+          </Writing>
+        ))}
+      </Writings>
     </SaveLoadDiv>
   );
 }
 
 // 백업/복원
-function Backup(props: { loadList: Function; save: Function }) {
-  const backup = () => {
-    props.save();
-    console.log(localStorage.getItem("saveData"));
-    navigator.clipboard.writeText(localStorage.getItem("saveData") || "{}");
-    alert("백업 문자열을 클립보드에 복사했어요.");
-  };
-
-  const restore = () => {
-    const data = prompt("백업 문자열을 입력해주세요.");
-    try {
-      if (data === "" || data === null) {
-        alert("잘못된 문자열이에요");
-        return;
-      }
-
-      JSON.parse(data);
-
-      localStorage.setItem("saveData", data);
-      window.location.reload();
-    } catch (err) {
-      alert("잘못된 문자열이에요");
-      console.error(err);
-    }
-  };
-
+function Backup() {
   return (
     <BottomMenu>
       <Btns>
-        <Btn2 onClick={backup}>백업</Btn2>
-        <Btn2 onClick={restore}>복원(덮어쓰기)</Btn2>
         <Btn2 onClick={() => signOut(auth)}>로그아웃</Btn2>
       </Btns>
     </BottomMenu>
   );
 }
 
-function App() {
-  const [id, setId] = useState(
-    JSON.parse(localStorage.getItem("lastWriting") || "{}")?.id || uuidv4()
+type EditorProps = {
+  user: User;
+};
+
+function Editor({ user }: EditorProps) {
+  const documentQuery = useMemo(
+    () =>
+      query(documentCollectionRef, where("author", "==", user.uid), limit(30)),
+    [user]
   );
-  const [title, setTitle] = useState(
-    JSON.parse(localStorage.getItem("lastWriting") || "{}")?.title
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const currentDocument = useMemo(
+    () => documents.find((document) => document.id === selectedId) ?? null,
+    [documents, selectedId]
   );
-  const [text, setText] = useState(
-    JSON.parse(localStorage.getItem("lastWriting") || "{}")?.text
+  const currentDocumentRef = useMemo(
+    () => (selectedId ? doc(documentCollectionRef, selectedId) : null),
+    [selectedId]
   );
 
-  // 자동 저장
   useEffect(() => {
-    localStorage.setItem(
-      "lastWriting",
-      JSON.stringify({ id, title, text, updated: new Date().toISOString() })
-    );
-  }, [id, title, text]);
+    const unsubscribe = onSnapshot(documentQuery, (snapshot) => {
+      setDocuments(snapshot.docs.map((doc) => doc.data()));
+    });
 
-  // 새로운 글 쓰기
-  const newWriting = () => {
-    const data = JSON.parse(localStorage.getItem("saveData") || "{}");
-    data[id] = {
-      title,
-      text,
-      updated: new Date().toISOString(),
-    };
-    localStorage.setItem("saveData", JSON.stringify(data));
-    setId(uuidv4());
-    setTitle("");
-    setText("");
-    loadList();
+    return () => unsubscribe();
+  }, [documentQuery]);
+
+  const createDocument = async () => {
+    const docRef = await addDoc(documentCollectionRef, {
+      author: user.uid,
+      title: "",
+      content: "",
+    });
+    setSelectedId(docRef.id);
+    return docRef;
   };
 
-  // 리스트 가져오기
-  const loadList = useCallback(() => {
-    Object.entries(JSON.parse(localStorage.getItem("saveData") || "{}")).map(
-      (e: any) => {
-        return {
-          id: e[0],
-          title: e[1].title,
-          text: e[1].text,
-          updated: e[1].updated,
-        };
-      }
-    );
-  }, []);
-
-  // 초기화
-  useEffect(() => {
-    loadList();
-  }, [loadList]);
-
-  // 제목 수정
-  const editTitle = (newTitle: string) => {
-    const data = JSON.parse(localStorage.getItem("saveData") || "{}");
-    data[id] = {
-      title: newTitle,
-      text,
-      updated: new Date().toISOString(),
-    };
-    localStorage.setItem("saveData", JSON.stringify(data));
-    setTitle(newTitle);
-    loadList();
+  const updateTitle = async (title: string) => {
+    const docRef = currentDocumentRef ?? (await createDocument());
+    updateDoc(docRef, { title });
   };
-
-  // 저장
-  const save = () => {
-    const data = JSON.parse(localStorage.getItem("saveData") || "{}");
-    data[id] = {
-      title: title,
-      text: text,
-      updated: new Date().toISOString(),
-    };
-    localStorage.setItem("saveData", JSON.stringify(data));
-  };
-
-  // 글 로드
-  const load = (newId: string) => {
-    // 현재 데이터 저장
-    const data = JSON.parse(localStorage.getItem("saveData") || "{}");
-    if (!title && !text) {
-      delete data[id];
-    } else {
-      data[id] = {
-        title: title,
-        text: text,
-        updated: new Date().toISOString(),
-      };
-    }
-    localStorage.setItem("saveData", JSON.stringify(data));
-
-    // 글 불러오기
-    const newWriting = data?.[newId];
-    localStorage.setItem(
-      "lastWriting",
-      JSON.stringify({
-        newId,
-        title: newWriting.title,
-        text: newWriting.text,
-        updated: new Date().toISOString(),
-      })
-    );
-    setId(newId);
-    setTitle(data?.[newId].title);
-    setText(data?.[newId].text);
+  const updateContent = async (content: string) => {
+    const docRef = currentDocumentRef ?? (await createDocument());
+    updateDoc(docRef, { content });
   };
 
   return (
@@ -443,19 +360,18 @@ function App() {
           🧑‍🎓 학생부 / 자소서 글자수 계산기
         </A>
       </H1>
-      <WritingList load={load} />
-      <Backup save={save} loadList={loadList} />
+      <WritingList documents={documents} setSelectedId={setSelectedId} />
+      <Backup />
       <Divver>
         <Title
-          title={title}
-          setTitle={setTitle}
-          newWriting={newWriting}
-          editTitle={editTitle}
+          document={currentDocument}
+          updateTitle={updateTitle}
+          createDocument={createDocument}
         />
-        <Text text={text} setText={setText} />
+        <Text document={currentDocument} updateContent={updateContent} />
       </Divver>
     </Wrapper>
   );
 }
 
-export default App;
+export default Editor;
