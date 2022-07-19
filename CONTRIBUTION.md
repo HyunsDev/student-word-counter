@@ -13,7 +13,7 @@
   ```
   yarn
   ```
-- 파이어베이스 관련 환경변수들을 설정해줍니다. 파이어베이스 콘솔에서 앱을 만든 후 Project Settings > Your apps 안의 정보를 `.env.local` 파일에 저장하면 됩니다. dotenv 파일 형식은 `.env.local.sample`을 참조해주세요.
+- 파이어베이스 관련 환경변수들을 설정해줍니다. 파이어베이스 콘솔에서 앱을 만든 후 Project Settings > Your apps 안의 정보를 `.env` 파일에 저장하면 됩니다. dotenv 파일 형식은 `.env.sample`을 참조해주세요.
 - 개발서버를 실행합니다.
   ```
   yarn start
