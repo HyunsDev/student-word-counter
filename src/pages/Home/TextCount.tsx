@@ -34,8 +34,6 @@ function TextCount(props: { content: string }) {
       <br />
       <TextCountExplain>
         영어, 숫자, 특수문자, 띄어쓰기 1바이트 / 엔터키 2바이트 / 한글 3바이트
-        <br />
-        모든 데이터는 이 브라우저에 저장되요. 유실 방지를 위해 꼭 백업해주세요.
       </TextCountExplain>
     </TextCountDiv>
   );
