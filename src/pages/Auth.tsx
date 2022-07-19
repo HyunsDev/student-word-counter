@@ -6,6 +6,105 @@ import {
 
 import { FirebaseError } from "firebase/app";
 import { auth } from "../firebase";
+import styled from "styled-components";
+
+const FullPage = styled.div`
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 1rem 5rem 1rem;
+`;
+
+const AuthForm = styled.form`
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 1rem;
+`;
+
+const GitHubLink = styled.a`
+  align-self: center;
+  color: black;
+  font-weight: bold;
+  text-decoration: none;
+  &:hover {
+    text-decoration: underline;
+  }
+`;
+
+const InputContainer = styled.div`
+  display: flex;
+  flex-direction: row;
+  padding: 0.75rem;
+  gap: 0.5rem;
+`;
+
+const InputIcon = styled.span``;
+
+const InputGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  border: 1px solid #cacaca;
+  border-radius: 0.25rem;
+
+  & ${InputContainer} {
+    border-bottom: 1px solid #cacaca;
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+`;
+
+const StyledInput = styled.input`
+  flex: 1;
+  border: none;
+  outline: none;
+`;
+
+const StyledSubmit = styled.input`
+  padding: 0.25rem 0.5rem;
+  background: black;
+  color: white;
+  border-radius: 0.25rem;
+  font-size: 1rem;
+  font-weight: bold;
+  border: none;
+  cursor: pointer;
+`;
+
+const QuestionContainer = styled.div`
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
+  justify-content: center;
+`;
+
+const Question = styled.span`
+  color: #929292;
+`;
+
+const LinkButton = styled.button`
+  background: none;
+  border: none;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+`;
+
+const ErrorMessage = styled.span`
+  color: #eb3939;
+  text-align: center;
+`;
 
 type AuthState =
   | {
@@ -151,65 +250,80 @@ export default function Auth(): ReactElement {
   };
 
   return (
-    <form onSubmit={handleSubmit}>
-      <label>
-        Email
-        <input
-          name="email"
-          type="email"
-          value={state.email}
-          onChange={(e) =>
-            dispatch({ type: "change-email", email: e.target.value })
-          }
+    <FullPage>
+      <AuthForm onSubmit={handleSubmit}>
+        <GitHubLink
+          href="https://github.com/HyunsDev/student-word-counter"
+          target={"_blank"}
+        >
+          🧑‍🎓 학생부 / 자소서 글자수 계산기
+        </GitHubLink>
+        <InputGroup>
+          <InputContainer>
+            <InputIcon>✉️</InputIcon>
+            <StyledInput
+              name="email"
+              type="email"
+              placeholder="이메일"
+              value={state.email}
+              onChange={(e) =>
+                dispatch({ type: "change-email", email: e.target.value })
+              }
+            />
+          </InputContainer>
+          <InputContainer>
+            <InputIcon>🔒</InputIcon>
+            <StyledInput
+              name="password"
+              type="password"
+              placeholder="비밀번호"
+              value={state.password}
+              onChange={(e) =>
+                dispatch({ type: "change-password", password: e.target.value })
+              }
+            />
+          </InputContainer>
+          {state.type === "register" && (
+            <InputContainer>
+              <InputIcon>🔒</InputIcon>
+              <StyledInput
+                name="confirm-password"
+                type="password"
+                placeholder="비밀번호 확인"
+                value={state.passwordConfirm}
+                onChange={(e) =>
+                  dispatch({
+                    type: "change-password-confirm",
+                    passwordConfirm: e.target.value,
+                  })
+                }
+              />
+            </InputContainer>
+          )}
+        </InputGroup>
+        <StyledSubmit
+          type="submit"
+          value={state.type === "login" ? "로그인" : "회원가입"}
         />
-      </label>
-      <label>
-        Password
-        <input
-          name="password"
-          type="password"
-          value={state.password}
-          onChange={(e) =>
-            dispatch({ type: "change-password", password: e.target.value })
-          }
-        />
-      </label>
-      {state.type === "register" && (
-        <label>
-          Confirm Password
-          <input
-            name="confirm-password"
-            type="password"
-            value={state.passwordConfirm}
-            onChange={(e) =>
-              dispatch({
-                type: "change-password-confirm",
-                passwordConfirm: e.target.value,
-              })
-            }
-          />
-        </label>
-      )}
-      <input
-        type="submit"
-        value={state.type === "login" ? "로그인" : "회원가입"}
-      />
-      {state.type === "login" ? (
-        <>
-          <p>회원이 아니신가요?</p>
-          <button onClick={() => dispatch({ type: "open-register" })}>
-            회원가입
-          </button>
-        </>
-      ) : (
-        <>
-          <p>이미 회원이신가요?</p>
-          <button onClick={() => dispatch({ type: "open-login" })}>
-            로그인
-          </button>
-        </>
-      )}
-      {state.error && <p>{state.error}</p>}
-    </form>
+        <QuestionContainer>
+          {state.type === "login" ? (
+            <>
+              <Question>회원이 아니신가요?</Question>
+              <LinkButton onClick={() => dispatch({ type: "open-register" })}>
+                회원가입
+              </LinkButton>
+            </>
+          ) : (
+            <>
+              <Question>이미 회원이신가요?</Question>
+              <LinkButton onClick={() => dispatch({ type: "open-login" })}>
+                로그인
+              </LinkButton>
+            </>
+          )}
+        </QuestionContainer>
+        {state.error && <ErrorMessage>{state.error}</ErrorMessage>}
+      </AuthForm>
+    </FullPage>
   );
 }
