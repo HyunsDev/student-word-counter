@@ -1,4 +1,4 @@
-import { FormEventHandler, ReactElement, useReducer } from "react";
+import { FormEventHandler, ReactElement, useState } from "react";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -121,70 +121,6 @@ type AuthState =
       error?: string;
     };
 
-type AuthAction =
-  | {
-      type: "open-login";
-    }
-  | {
-      type: "open-register";
-    }
-  | {
-      type: "change-email";
-      email: string;
-    }
-  | {
-      type: "change-password";
-      password: string;
-    }
-  | {
-      type: "change-password-confirm";
-      passwordConfirm: string;
-    }
-  | {
-      type: "set-error";
-      error?: string;
-    };
-
-function authStateReducer(state: AuthState, action: AuthAction): AuthState {
-  switch (action.type) {
-    case "open-login":
-      return {
-        type: "login",
-        email: "",
-        password: "",
-      };
-    case "open-register":
-      return {
-        type: "register",
-        email: "",
-        password: "",
-        passwordConfirm: "",
-      };
-    case "change-email":
-      return {
-        ...state,
-        email: action.email,
-      };
-    case "change-password":
-      return {
-        ...state,
-        password: action.password,
-      };
-    case "change-password-confirm": {
-      if (state.type === "login") return state;
-      return {
-        ...state,
-        passwordConfirm: action.passwordConfirm,
-      };
-    }
-    case "set-error":
-      return {
-        ...state,
-        error: action.error,
-      };
-  }
-}
-
 function translateFirebaseErrorCode(code: string): string {
   switch (code) {
     case "auth/email-already-in-use":
@@ -201,7 +137,7 @@ function translateFirebaseErrorCode(code: string): string {
 }
 
 export default function Auth(): ReactElement {
-  const [state, dispatch] = useReducer(authStateReducer, {
+  const [state, setState] = useState<AuthState>({
     type: "login",
     email: "",
     password: "",
@@ -211,13 +147,13 @@ export default function Auth(): ReactElement {
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (error) {
-      dispatch({
-        type: "set-error",
+      setState((original) => ({
+        ...original,
         error:
           error instanceof FirebaseError
             ? translateFirebaseErrorCode(error.code)
-            : "알 수 없는 오류가 발생했습니다.",
-      });
+            : "알 수 없는 오류입니다.",
+      }));
     }
   };
   const register = async (
@@ -226,19 +162,22 @@ export default function Auth(): ReactElement {
     passwordConfirm: string
   ) => {
     if (password !== passwordConfirm) {
-      dispatch({ type: "set-error", error: "비밀번호를 확인해주세요." });
+      setState((original) => ({
+        ...original,
+        error: "비밀번호가 일치하지 않습니다.",
+      }));
       return;
     }
     try {
       await createUserWithEmailAndPassword(auth, email, password);
     } catch (error) {
-      dispatch({
-        type: "set-error",
+      setState((original) => ({
+        ...original,
         error:
           error instanceof FirebaseError
             ? translateFirebaseErrorCode(error.code)
-            : "알 수 없는 오류가 발생했습니다.",
-      });
+            : "알 수 없는 오류입니다.",
+      }));
     }
   };
 
@@ -267,7 +206,7 @@ export default function Auth(): ReactElement {
               placeholder="이메일"
               value={state.email}
               onChange={(e) =>
-                dispatch({ type: "change-email", email: e.target.value })
+                setState((original) => ({ ...original, email: e.target.value }))
               }
             />
           </InputContainer>
@@ -279,7 +218,10 @@ export default function Auth(): ReactElement {
               placeholder="비밀번호"
               value={state.password}
               onChange={(e) =>
-                dispatch({ type: "change-password", password: e.target.value })
+                setState((original) => ({
+                  ...original,
+                  password: e.target.value,
+                }))
               }
             />
           </InputContainer>
@@ -292,10 +234,11 @@ export default function Auth(): ReactElement {
                 placeholder="비밀번호 확인"
                 value={state.passwordConfirm}
                 onChange={(e) =>
-                  dispatch({
-                    type: "change-password-confirm",
-                    passwordConfirm: e.target.value,
-                  })
+                  setState((original) =>
+                    original.type === "register"
+                      ? { ...original, passwordConfirm: e.target.value }
+                      : original
+                  )
                 }
               />
             </InputContainer>
@@ -309,14 +252,29 @@ export default function Auth(): ReactElement {
           {state.type === "login" ? (
             <>
               <Question>회원이 아니신가요?</Question>
-              <LinkButton onClick={() => dispatch({ type: "open-register" })}>
+              <LinkButton
+                type="button"
+                onClick={() =>
+                  setState({
+                    type: "register",
+                    email: "",
+                    password: "",
+                    passwordConfirm: "",
+                  })
+                }
+              >
                 회원가입
               </LinkButton>
             </>
           ) : (
             <>
               <Question>이미 회원이신가요?</Question>
-              <LinkButton onClick={() => dispatch({ type: "open-login" })}>
+              <LinkButton
+                type="button"
+                onClick={() =>
+                  setState({ type: "login", email: "", password: "" })
+                }
+              >
                 로그인
               </LinkButton>
             </>
